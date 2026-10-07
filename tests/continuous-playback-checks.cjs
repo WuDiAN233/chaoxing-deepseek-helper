@@ -1,7 +1,7 @@
 module.exports = async ({evaluate, record, assert}) => {
   const continuous = await evaluate(`(async()=>{
     const {video,state}=makeRecoveryVideo();let failures=0;
-    const guard=flowFixture.bindMediaPlaybackRecovery(video,{signal:new AbortController().signal,isCurrent:()=>true,hasActiveQuiz:()=>false,isFinished:()=>false,onFinished:()=>{},onFailure:()=>failures++,log:()=>{},delayMs:1,pollMs:5});
+    const guard=flowFixture.bindMediaPlaybackRecovery(video,{signal:new AbortController().signal,isCurrent:()=>true,hasActiveQuiz:()=>false,isFinished:()=>false,onFinished:()=>{},onFailure:()=>failures++,log:()=>{},delayMs:1,maxRetryDelayMs:5,pollMs:5});
     for(let i=0;i<8;i++){
       video.pause();await new Promise(r=>setTimeout(r,20));
       if(!state.paused){video.currentTime+=1;video.dispatchEvent(new Event('timeupdate'));}
@@ -18,23 +18,32 @@ module.exports = async ({evaluate, record, assert}) => {
     const guard=flowFixture.bindMediaPlaybackRecovery(video,{signal:new AbortController().signal,isCurrent:()=>true,hasActiveQuiz:()=>false,isFinished:()=>false,onFinished:()=>{},onFailure:()=>failures++,log:()=>{},delayMs:1,pollMs:5});
     await new Promise(r=>setTimeout(r,150));const result={calls:state.calls,failures};guard.dispose();return result;
   })()`);
-  assert.deepEqual(seeking,{calls:5,failures:1});
-  record('Seeking without successful playback cannot reset the failure budget or produce unlimited play requests');
+  assert.ok(seeking.calls>5);assert.ok(seeking.calls<40);assert.equal(seeking.failures,0);
+  record('Seeking without successful playback preserves retry throttling while the playback watcher remains active');
 
   const restartedBudget = await evaluate(`(async()=>{
     const {video,state}=makeRecoveryVideo();let failures=0,canPlay=false;
     video.play=async()=>{state.calls++;if(canPlay)state.paused=false;};
     state.paused=true;
-    const guard=flowFixture.bindMediaPlaybackRecovery(video,{signal:new AbortController().signal,isCurrent:()=>true,hasActiveQuiz:()=>false,isFinished:()=>false,onFinished:()=>{},onFailure:()=>failures++,log:()=>{},delayMs:1,pollMs:20});
+    const guard=flowFixture.bindMediaPlaybackRecovery(video,{signal:new AbortController().signal,isCurrent:()=>true,hasActiveQuiz:()=>false,isFinished:()=>false,onFinished:()=>{},onFailure:()=>failures++,log:()=>{},delayMs:1,maxRetryDelayMs:5,pollMs:20});
     for(let i=0;i<200&&state.calls<2;i++)await new Promise(r=>setTimeout(r,1));
     canPlay=true;
     for(let i=0;i<200&&state.paused;i++)await new Promise(r=>setTimeout(r,1));
     video.currentTime+=1;video.dispatchEvent(new Event('timeupdate'));const recovered=state.calls;
     canPlay=false;video.pause();await new Promise(r=>setTimeout(r,190));
-    const result={recovered,followingAttempts:state.calls-recovered,failures};guard.dispose();return result;
+    const followingAttempts=state.calls-recovered;canPlay=true;await new Promise(r=>setTimeout(r,30));const result={recovered,followingAttempts,failures,paused:state.paused};guard.dispose();return result;
   })()`);
-  assert.equal(restartedBudget.recovered,3);assert.equal(restartedBudget.followingAttempts,5);assert.equal(restartedBudget.failures,1);
-  record('Actual progress after two failed starts restores the full bounded recovery budget for a later independent stall');
+  assert.equal(restartedBudget.recovered,3);assert.ok(restartedBudget.followingAttempts>5);assert.equal(restartedBudget.failures,0);assert.equal(restartedBudget.paused,false);
+  record('A later independent stall still resumes after more than five failed attempts without rebuilding the controller');
+
+  const rejection = await evaluate(`(async()=>{
+    const {video,state}=makeRecoveryVideo();state.paused=true;let warnings=0;
+    video.play=async()=>{state.calls++;if(state.calls<=7)throw new DOMException('temporary block','NotAllowedError');state.paused=false;};
+    const guard=flowFixture.bindMediaPlaybackRecovery(video,{signal:new AbortController().signal,isCurrent:()=>true,hasActiveQuiz:()=>false,isFinished:()=>false,onFinished:()=>{},onFailure:()=>{},log:(m,t)=>{if(t==='warning')warnings++;},delayMs:1,maxRetryDelayMs:5,pollMs:5});
+    await new Promise(r=>setTimeout(r,150));guard.dispose();return {calls:state.calls,paused:state.paused,warnings};
+  })()`);
+  assert.equal(rejection.calls,8);assert.equal(rejection.paused,false);assert.equal(rejection.warnings,1);
+  record('Seven temporary native play rejections produce one warning and a successful eighth start, rather than closing recovery');
 
   const cancelled = await evaluate(`(async()=>{
     const {video,state}=makeRecoveryVideo();const controller=new AbortController();

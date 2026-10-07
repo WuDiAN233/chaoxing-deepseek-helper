@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网课小助手｜DeepSeek 答题｜1–10倍速
 // @namespace    noshuang
-// @version      0.3.16
+// @version      0.3.17
 // @author       isMobile
 // @description  学习通、智慧树课程助手：1–10倍速、DeepSeek结构化答题、填写验证。使用个人DeepSeek API Key，无第三方付费题库。
 // @license      MIT
@@ -744,7 +744,16 @@
     let recovering = false;
     let waitingForData = false;
     let waitingForForeground = false;
-    let attempts = [];
+    let failedAttempts = 0;
+    let nextAttemptAt = 0;
+    let lastWarning = "";
+    const delayMs = Math.max(1, Number(options.delayMs ?? 300) || 300);
+    const maxRetryDelayMs = Math.max(delayMs, Number(options.maxRetryDelayMs ?? 3000) || 3000);
+    const noteFailure = (message = "播放器暂未恢复；脚本会持续尝试续播") => {
+      failedAttempts = Math.min(failedAttempts + 1, 10);
+      nextAttemptAt = Date.now() + Math.min(maxRetryDelayMs, delayMs * 2 ** failedAttempts);
+      if (message !== lastWarning) { lastWarning = message; options.log(message, "warning"); }
+    };
     let lastPlaybackTime = Number(mediaElement.currentTime);
     const trackPosition = () => { lastPlaybackTime = Number(mediaElement.currentTime); };
     const observeProgress = () => {
@@ -756,7 +765,9 @@
         return;
       }
       if (position > lastPlaybackTime) {
-        attempts = [];
+        failedAttempts = 0;
+        nextAttemptAt = 0;
+        lastWarning = "";
         lastPlaybackTime = position;
       }
     };
@@ -785,8 +796,8 @@
     };
     const failed = () => {
       if (disposed || options.signal.aborted || !options.isCurrent()) return;
-      dispose();
-      options.onFailure(new Error("视频资源加载失败，请查看播放器提示"));
+      waitingForData = true;
+      noteFailure("视频资源暂不可用；续播监听保持运行，资源就绪后自动继续");
     };
     const resume = () => {
       observeProgress();
@@ -795,27 +806,22 @@
         timer = null;
         if (!canResume()) return;
         if (options.isFinished()) return options.onFinished();
-        attempts = attempts.filter((at) => Date.now() - at < 30000);
-        if (attempts.length >= 5) {
-          dispose();
-          options.onFailure(new Error("视频连续被暂停，自动恢复已停止；请查看播放器提示"));
-          return;
-        }
-        attempts.push(Date.now());
         waitingForData = false;
         recovering = true;
         try {
-          await ensureMediaPlaying(mediaElement, {
+          const started = await ensureMediaPlaying(mediaElement, {
             signal: options.signal, isCurrent: options.isCurrent,
             isBlocked: () => options.hasActiveQuiz() || !playbackAllowed()
           });
           if (!disposed && !mediaElement.paused) options.log("已恢复意外暂停的视频播放", "primary");
+          else if (!started && canResume()) noteFailure();
         } catch (error) {
-          if (!disposed && !waitForData(error)) options.onFailure(error);
+          if (!disposed && !waitForData(error)) noteFailure();
         } finally {
           recovering = false;
+          if (canResume()) resume();
         }
-      }, options.delayMs ?? 300);
+      }, Math.max(delayMs, nextAttemptAt - Date.now()));
     };
     const poll = setInterval(() => {
       if (!options.isCurrent() || options.signal.aborted) return dispose();
@@ -6871,7 +6877,6 @@
                 signal: context.signal,
                 isCurrent: () => !settled && context.isCurrent(),
                 hasActiveQuiz: () => !!quiz?.hasActiveQuiz(),
-                isPlaybackAllowed: () => isCxPlaybackForeground(document),
                 isFinished: () => isFinishedTask(iframe),
                 onFinished: finish,
                 onEnded: ended,
@@ -6883,7 +6888,7 @@
                 try {
                   await ensureMediaPlaying(mediaElement, {
                     signal: context.signal, isCurrent: () => !settled && context.isCurrent(),
-                    isBlocked: () => !!quiz?.hasActiveQuiz() || !isCxPlaybackForeground(document)
+                    isBlocked: () => !!quiz?.hasActiveQuiz()
                   });
                 } catch (error) {
                   if (!playbackRecovery.waitForData(error)) throw error;
