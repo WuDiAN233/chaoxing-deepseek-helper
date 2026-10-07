@@ -1,0 +1,27 @@
+[
+  {
+    "name": "vue.js",
+    "url": "https://lib.baomitu.com/vue/3.4.31/vue.global.prod.js",
+    "sha256": "ddcac15cb7f94c59b0ffbe0a2fb40b355ff468b2804c5631ed6214030ef3d2fa"
+  },
+  {
+    "name": "vue-demi.js",
+    "url": "https://lib.baomitu.com/vue-demi/0.14.7/index.iife.js",
+    "sha256": "1fed4e916179652f137424f07fefd9ed0271d060424bdb86ca0d3209f4ad0101"
+  },
+  {
+    "name": "pinia.js",
+    "url": "https://lib.baomitu.com/pinia/2.3.1/pinia.iife.min.js",
+    "sha256": "66f536069790b757302c76dc9d5d76095f2e5587674181d676c1e4c272d1114e"
+  },
+  {
+    "name": "element-plus.js",
+    "url": "https://lib.baomitu.com/element-plus/2.7.2/index.full.min.js",
+    "sha256": "921310ed3da7c6b9a2cccf33bed689b1e41f1cda6a0aa857d690970187ce1814"
+  },
+  {
+    "name": "element-plus.css",
+    "url": "https://lib.baomitu.com/element-plus/2.8.2/index.min.css",
+    "sha256": "e9ac229e590fcb5023f048db5ea8682f662cbd626b8cbd80e6a379e9c25aebc2"
+  }
+]

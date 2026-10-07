@@ -1,0 +1,14 @@
+{
+  "name": "chaoxing-deepseek-helper",
+  "version": "0.3.15",
+  "private": true,
+  "description": "LearningTong userscript with native speed limits, playback recovery and DeepSeek answer assistance",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "check": "node scripts/check.cjs",
+    "pretest": "node scripts/prepare-tests.cjs",
+    "test": "node tests/verify_browser.cjs",
+    "build": "node scripts/package.cjs"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "prefix": "\nconst fixtureLogs = [];\nconst _GM_getValue = (key) => JSON.parse(localStorage.getItem(\"fixture-gm\") || \"{}\")[key];\nconst _GM_setValue = (key, value) => { const values = JSON.parse(localStorage.getItem(\"fixture-gm\") || \"{}\"); values[key] = value; localStorage.setItem(\"fixture-gm\", JSON.stringify(values)); };\nconst getScriptInfo = () => ({version:fixtureScriptVersion});\nif (!localStorage.getItem(\"fixture-gm\")) _GM_setValue(\"config\", JSON.stringify({version:\"0.2.7\",platformParams:{cx:{parts:[{name:\"章节设置\",params:[{name:\"章节作业自动提交\",value:true,type:\"boolean\"},{name:\"是否自动下一章节\",value:false,type:\"boolean\"},{name:\"只答题，不做其他\",value:true,type:\"boolean\"},{name:\"视频弹题自动处理\",value:false,type:\"boolean\"}]}]}},queryApis:[{name:\"题库\",token:\"fixture-legacy-card\",url:\"https://search.tikuhai.com\"}]}));\nconst fixturePinia = Pinia.createPinia();\nPinia.setActivePinia(fixturePinia);\nconst vue = Vue;\nconst pinia = Pinia;\nconst _unsafeWindow = window;\nconst __publicField = (object,key,value) => Object.defineProperty(object,key,{value,writable:true,configurable:true,enumerable:true});\nconst fixtureNetwork = {requests:[],responses:[],aborts:0};\nconst fixtureCompletion = (answer) => ({choices:[{finish_reason:\"stop\",message:{content:JSON.stringify({option_indices:[],answers:[],judgement:null,uncertain:false,explanation:\"本地模拟答案\",...answer})}}],model:\"fixture\",usage:{total_tokens:10}});\nconst _GM_xmlhttpRequest = (options) => {\n  fixtureNetwork.requests.push({url:options.url,body:JSON.parse(options.data),authorizationValid:options.headers.Authorization === \"Bearer sk-fixture-only\",anonymous:options.anonymous});\n  const response = fixtureNetwork.responses.shift() || {payload:fixtureCompletion({judgement:true})};\n  let ended = false;\n  const timer = response.hold ? null : setTimeout(()=>{if(ended)return;ended=true;if(response.timeout)options.ontimeout();else if(response.networkError)options.onerror();else options.onload({status:response.status||200,responseText:response.raw ?? JSON.stringify(response.payload),finalUrl:response.finalUrl||options.url});},0);\n  return {abort(){if(ended)return;ended=true;clearTimeout(timer);fixtureNetwork.aborts++;options.onabort();}};\n};\n",
+  "sections": [
+    [
+      "  const isObject =",
+      "  const VIDEO_QUIZ_SETTING ="
+    ],
+    [
+      "  const VIDEO_QUIZ_SETTING =",
+      "  const VIDEO_SPEED_SETTING ="
+    ],
+    [
+      "  const VIDEO_SPEED_SETTING =",
+      "  const _hoisted_1$6 ="
+    ],
+    [
+      "  const _hoisted_1$6 =",
+      "  // DeepSeek credentials stay"
+    ],
+    [
+      "  // DeepSeek credentials stay",
+      "  const _hoisted_1$4 ="
+    ],
+    [
+      "  const _hoisted_1$4 =",
+      "  const _export_sfc ="
+    ],
+    [
+      "  const isOptionSelected =",
+      "  const useCxChapterLogic ="
+    ],
+    [
+      "  class ZhsQuestionHandler",
+      "  const hookError ="
+    ]
+  ],
+  "suffix": "\nconst fixtureConfig = useConfigStore();\nconst fixtureVideo = document.createElement(\"video\");\ndocument.body.appendChild(fixtureVideo);\nconst fixtureBinding = bindVideoPlaybackSpeed(fixtureVideo,fixtureConfig,(message,type)=>fixtureLogs.push({message,type}));\nconst fixtureShadow = document.getElementById(\"panel\").attachShadow({mode:\"closed\"});\nconst fixtureCss = new CSSStyleSheet();\nconst fixtureMount = document.createElement(\"div\");\nfixtureMount.style.cssText=\"display:flex;gap:24px;padding:16px;font:14px Arial,sans-serif;background:white\";\nfixtureShadow.append(fixtureMount);\nconst fixtureQuestions = vue.reactive([]);\nconst app = Vue.createApp({setup(){Vue.watch(fixtureConfig,persistConfig,{deep:true});return()=>Vue.h(Vue.Fragment,[Vue.h(\"div\",{style:\"width:300px\"},[Vue.h(\"h3\",\"视频及答题设置\"),Vue.h(_sfc_main$7,{globalConfig:fixtureConfig})]),Vue.h(\"div\",{style:\"width:440px\"},[Vue.h(\"h3\",\"DeepSeek 三路投票\"),Vue.h(_sfc_main$6,{questionList:fixtureQuestions})])]);}});\napp.use(fixturePinia);app.use(ElementPlus);app.mount(fixtureMount);\nwindow.fixture={config:fixtureConfig,video:fixtureVideo,status:videoSpeedStatus,logs:fixtureLogs,binding:fixtureBinding,shadow:fixtureShadow,normalizeVideoSpeed,bindVideoPlaybackSpeed,speedParam:()=>fixtureConfig.platformParams.cx.parts[0].params.find(p=>p.name===VIDEO_SPEED_SETTING)};\nconst fixtureLogHost=document.createElement('div');fixtureLogHost.style.cssText='width:310px;margin-top:20px';document.body.append(fixtureLogHost);const fixtureLogStore=useLogStore();const logApp=Vue.createApp(_sfc_main$8,{logList:fixtureLogStore.logList});logApp.use(fixturePinia);logApp.use(ElementPlus);logApp.mount(fixtureLogHost);window.logFixture={store:fixtureLogStore,host:fixtureLogHost};\nwindow.flowFixture={getCxChapterFrame,isCxChapterFrameReady,isCxPlaybackForeground,getCxSaferRate,getCxEffectiveRate,planCxRateFallback,planCxVideoReplay,restartCxVideoForReplay,parseCxCardCompletion,readCxCardCompletion,getCxVideoRateLimit,ensureMediaPlaying,bindMediaPlaybackRecovery,isCxFinishedTask,getCxCardTasks,waitForCxCondition,getCxNextCard,clickCxNextChapter,watchVideoQuiz,collectCxTaskFrames,submitCxChapterWork};\nwindow.aiFixture={getAnswer,requestDeepSeekAnswer,parseAiCompletion,chooseMajorityAnswer,credentials:aiCredentials,saveKey:saveDeepSeekKey,stop:stopAiRequests,test:testDeepSeekConnection,network:fixtureNetwork,completion:fixtureCompletion,fill:fillStructuredAnswer,CxQuestionHandler,ZhsQuestionHandler,getAnswerValues,questions:fixtureQuestions,clearCache:()=>{aiAnswerCache.clear();aiVoteCache.clear();_GM_setValue(\"deepseek-answer-cache-v1\",[]);}};\nfetch(\"dependencies/element-plus.css\").then(r=>r.text()).then(css=>{fixtureCss.replaceSync(css);fixtureShadow.adoptedStyleSheets=[fixtureCss];window.fixtureReady=true;});\n",
+  "html": "<!doctype html><html><head><meta charset=\"utf-8\"><title>Local DeepSeek verification</title><link rel=\"stylesheet\" href=\"dependencies/element-plus.css\"></head><body style=\"margin:16px;background:#edf2f8\"><div id=\"panel\"></div><script>window.fixtureErrors=[];window.addEventListener('error',e=>fixtureErrors.push({message:e.message,line:e.lineno}));window.addEventListener('unhandledrejection',e=>fixtureErrors.push({message:String(e.reason)}));</script><script src=\"dependencies/vue.js\"></script><script src=\"dependencies/vue-demi.js\"></script><script src=\"dependencies/pinia.js\"></script><script src=\"dependencies/element-plus.js\"></script><script src=\"fixture-code.js\"></script></body></html>"
+}

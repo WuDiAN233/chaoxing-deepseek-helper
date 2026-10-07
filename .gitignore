@@ -1,0 +1,14 @@
+.git/
+.artifacts/
+.fixtures/
+node_modules/
+.env
+.env.*
+*.log
+*.db
+*.sqlite*
+*.har
+*.zip
+__pycache__/
+.DS_Store
+Thumbs.db
