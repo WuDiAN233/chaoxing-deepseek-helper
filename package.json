@@ -1,6 +1,6 @@
 {
   "name": "chaoxing-deepseek-helper",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "private": true,
   "description": "LearningTong userscript with native speed limits, playback recovery and DeepSeek answer assistance",
   "license": "MIT",

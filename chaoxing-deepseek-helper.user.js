@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网课小助手｜DeepSeek 答题｜1–10倍速
 // @namespace    noshuang
-// @version      0.3.15
+// @version      0.3.16
 // @author       isMobile
 // @description  学习通、智慧树课程助手：1–10倍速、DeepSeek结构化答题、填写验证。使用个人DeepSeek API Key，无第三方付费题库。
 // @license      MIT
@@ -745,6 +745,21 @@
     let waitingForData = false;
     let waitingForForeground = false;
     let attempts = [];
+    let lastPlaybackTime = Number(mediaElement.currentTime);
+    const trackPosition = () => { lastPlaybackTime = Number(mediaElement.currentTime); };
+    const observeProgress = () => {
+      if (disposed || options.signal.aborted || !options.isCurrent()) return;
+      const position = Number(mediaElement.currentTime);
+      if (!Number.isFinite(position) || !Number.isFinite(lastPlaybackTime) ||
+          mediaElement.seeking || options.hasActiveQuiz() || position < lastPlaybackTime) {
+        lastPlaybackTime = position;
+        return;
+      }
+      if (position > lastPlaybackTime) {
+        attempts = [];
+        lastPlaybackTime = position;
+      }
+    };
     const dispose = () => {
       if (disposed) return;
       disposed = true;
@@ -754,6 +769,9 @@
       mediaElement.removeEventListener("canplay", resume, true);
       mediaElement.removeEventListener("loadeddata", resume, true);
       mediaElement.removeEventListener("error", failed, true);
+      mediaElement.removeEventListener("timeupdate", observeProgress, true);
+      for (const event of ["seeking", "seeked", "loadedmetadata", "emptied"])
+        mediaElement.removeEventListener(event, trackPosition, true);
       options.signal.removeEventListener("abort", dispose);
     };
     const playbackAllowed = () => options.isPlaybackAllowed?.() !== false;
@@ -771,6 +789,7 @@
       options.onFailure(new Error("视频资源加载失败，请查看播放器提示"));
     };
     const resume = () => {
+      observeProgress();
       if (!canResume() || timer !== null || recovering) return;
       timer = setTimeout(async () => {
         timer = null;
@@ -814,6 +833,9 @@
     mediaElement.addEventListener("canplay", resume, true);
     mediaElement.addEventListener("loadeddata", resume, true);
     mediaElement.addEventListener("error", failed, true);
+    mediaElement.addEventListener("timeupdate", observeProgress, true);
+    for (const event of ["seeking", "seeked", "loadedmetadata", "emptied"])
+      mediaElement.addEventListener(event, trackPosition, true);
     options.signal.addEventListener("abort", dispose, { once: true });
     return { resume, waitForData, dispose };
   };

@@ -250,6 +250,7 @@ const server = http.createServer((req, res) => {
   await require('./resume-checks.cjs')({evaluate,pause,record,assert,result});
   await require('./log-checks.cjs')({evaluate,pause,record,assert,result});
   await require('./foreground-checks.cjs')({evaluate,pause,record,assert,result});
+  await require('./continuous-playback-checks.cjs')({evaluate,pause,record,assert,result});
   await require('./speed-policy-checks.cjs')({evaluate,pause,record,assert,result});
   const screenshot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   fs.writeFileSync(path.join(RUN, 'deepseek-preview.png'), Buffer.from(screenshot.data, 'base64'));
