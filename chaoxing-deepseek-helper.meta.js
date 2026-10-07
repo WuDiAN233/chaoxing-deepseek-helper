@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网课小助手｜DeepSeek 答题｜1–10倍速
 // @namespace    noshuang
-// @version      0.3.18
+// @version      0.3.19
 // @author       isMobile
 // @description  学习通、智慧树课程助手：1–10倍速、DeepSeek结构化答题、填写验证。使用个人DeepSeek API Key，无第三方付费题库。
 // @license      MIT

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网课小助手｜DeepSeek 答题｜1–10倍速
 // @namespace    noshuang
-// @version      0.3.18
+// @version      0.3.19
 // @author       isMobile
 // @description  学习通、智慧树课程助手：1–10倍速、DeepSeek结构化答题、填写验证。使用个人DeepSeek API Key，无第三方付费题库。
 // @license      MIT
@@ -695,19 +695,22 @@
     });
     const waitReady = () => new Promise((resolve, reject) => {
       let timer;
+      let checkTimer;
       const cleanup = () => {
         clearTimeout(timer);
+        clearInterval(checkTimer);
         mediaElement.removeEventListener("canplay", check);
         mediaElement.removeEventListener("loadeddata", check);
+        mediaElement.removeEventListener("loadedmetadata", check);
         mediaElement.removeEventListener("error", failed);
         options.signal.removeEventListener("abort", cancelled);
       };
       const done = (value) => { cleanup(); resolve(value); };
       const check = () => {
         if (!current()) return done(false);
-        if (mediaElement.readyState >= 2) done(true);
+        if (mediaElement.readyState >= 1 && !mediaElement.error) done(true);
       };
-      const failed = () => { cleanup(); reject(new Error("视频资源加载失败，请查看播放器提示")); };
+      const failed = () => { cleanup(); reject(Object.assign(new Error("视频资源加载失败，请查看播放器提示"), { retryOnReady: true })); };
       const cancelled = () => done(false);
       timer = setTimeout(() => {
         if (!current()) return done(false);
@@ -715,8 +718,10 @@
       }, options.timeoutMs ?? 10000);
       mediaElement.addEventListener("canplay", check);
       mediaElement.addEventListener("loadeddata", check);
+      mediaElement.addEventListener("loadedmetadata", check);
       mediaElement.addEventListener("error", failed);
       options.signal.addEventListener("abort", cancelled, { once: true });
+      checkTimer = setInterval(check, 100);
       check();
     });
     const task = (async () => {
@@ -729,7 +734,7 @@
         } catch (error) {
           if (!current()) return false;
           if (error?.name !== "AbortError") throw error;
-          if (attempt === 2) throw new Error("视频资源反复重载，自动播放已停止；请查看播放器提示");
+          if (attempt === 2) throw Object.assign(new Error("视频资源反复重载；保持续播监听，请查看播放器提示"), { retryOnReady: true });
           if (!await waitReady()) return false;
         }
       }
@@ -743,6 +748,8 @@
     let timer = null;
     let recovering = false;
     let waitingForData = false;
+    let waitingReadyState = 0;
+    let waitingSource = "";
     let waitingForForeground = false;
     let failedAttempts = 0;
     let nextAttemptAt = 0;
@@ -777,8 +784,9 @@
       clearTimeout(timer);
       clearInterval(poll);
       mediaElement.removeEventListener("pause", resume, true);
-      mediaElement.removeEventListener("canplay", resume, true);
-      mediaElement.removeEventListener("loadeddata", resume, true);
+      mediaElement.removeEventListener("canplay", ready, true);
+      mediaElement.removeEventListener("loadeddata", ready, true);
+      mediaElement.removeEventListener("loadedmetadata", ready, true);
       mediaElement.removeEventListener("error", failed, true);
       mediaElement.removeEventListener("timeupdate", observeProgress, true);
       for (const event of ["seeking", "seeked", "loadedmetadata", "emptied"])
@@ -787,24 +795,50 @@
     };
     const playbackAllowed = () => options.isPlaybackAllowed?.() !== false;
     const canResume = () => !disposed && !options.signal.aborted && options.isCurrent() &&
-      mediaElement.paused && !mediaElement.ended && playbackAllowed() && !options.hasActiveQuiz() && (!waitingForData || mediaElement.readyState >= 2);
+      mediaElement.paused && !mediaElement.ended && playbackAllowed() && !options.hasActiveQuiz();
     const waitForData = (error) => {
-      if (!error?.retryOnReady || disposed || options.signal.aborted || !options.isCurrent() || mediaElement.ended) return false;
+      if (!(error?.retryOnReady || error?.name === "NotSupportedError" || mediaElement.error) ||
+          disposed || options.signal.aborted || !options.isCurrent() || mediaElement.ended) return false;
       waitingForData = true;
-      options.log("视频换源暂未就绪；资源就绪后自动继续播放，结束检查保持运行", "warning");
+      waitingReadyState = mediaElement.readyState;
+      waitingSource = mediaElement.currentSrc || mediaElement.src;
+      noteFailure("视频换源暂未就绪；保留监听并限频尝试播放，资源就绪后自动继续");
+      nextAttemptAt = Math.max(nextAttemptAt, Date.now() + maxRetryDelayMs);
       return true;
     };
     const failed = () => {
       if (disposed || options.signal.aborted || !options.isCurrent()) return;
-      waitingForData = true;
-      noteFailure("视频资源暂不可用；续播监听保持运行，资源就绪后自动继续");
+      waitForData({ retryOnReady: true });
+    };
+    const handlePlayError = (error) => {
+      if (disposed || options.signal.aborted || !options.isCurrent()) return;
+      if (!waitForData(error))
+        noteFailure(`原生播放请求暂未成功（${error?.name || "Error"}）；保持续播监听`);
+    };
+    const releaseDataWait = () => {
+      waitingForData = false;
+      nextAttemptAt = 0;
+      clearTimeout(timer);
+      timer = null;
+    };
+    const ready = () => {
+      if (disposed || options.signal.aborted || !options.isCurrent()) return;
+      if (waitingForData && mediaElement.readyState >= 1 && !mediaElement.error) releaseDataWait();
+      resume();
     };
     const resume = () => {
       observeProgress();
+      // Metadata can be all that preload=metadata supplies until play() starts fetching.
+      // Polling also handles a readiness event missed while the player changes source.
+      if (waitingForData && mediaElement.readyState >= 1 && !mediaElement.error &&
+          (mediaElement.readyState > waitingReadyState || (mediaElement.currentSrc || mediaElement.src) !== waitingSource))
+        releaseDataWait();
       if (!canResume() || timer !== null || recovering) return;
       timer = setTimeout(async () => {
         timer = null;
         if (!canResume()) return;
+        // An error can move the retry deadline after this callback was queued.
+        if (Date.now() < nextAttemptAt) return resume();
         if (options.isFinished()) return options.onFinished();
         waitingForData = false;
         recovering = true;
@@ -816,7 +850,7 @@
           if (!disposed && !mediaElement.paused) options.log("已恢复意外暂停的视频播放", "primary");
           else if (!started && canResume()) noteFailure();
         } catch (error) {
-          if (!disposed && !waitForData(error)) noteFailure();
+          handlePlayError(error);
         } finally {
           recovering = false;
           if (canResume()) resume();
@@ -836,14 +870,15 @@
       resume();
     }, options.pollMs ?? 500);
     mediaElement.addEventListener("pause", resume, true);
-    mediaElement.addEventListener("canplay", resume, true);
-    mediaElement.addEventListener("loadeddata", resume, true);
+    mediaElement.addEventListener("canplay", ready, true);
+    mediaElement.addEventListener("loadeddata", ready, true);
+    mediaElement.addEventListener("loadedmetadata", ready, true);
     mediaElement.addEventListener("error", failed, true);
     mediaElement.addEventListener("timeupdate", observeProgress, true);
     for (const event of ["seeking", "seeked", "loadedmetadata", "emptied"])
       mediaElement.addEventListener(event, trackPosition, true);
     options.signal.addEventListener("abort", dispose, { once: true });
-    return { resume, waitForData, dispose };
+    return { resume, waitForData, handlePlayError, dispose };
   };
   const CONFIG_STORAGE_KEY = "config";
   const LEGACY_CONFIG_STORAGE_KEY = "globalConfig";
@@ -6908,7 +6943,7 @@
                     isBlocked: () => !!quiz?.hasActiveQuiz()
                   });
                 } catch (error) {
-                  if (!playbackRecovery.waitForData(error)) throw error;
+                  playbackRecovery.handlePlayError(error);
                 }
               }
               if (settled)

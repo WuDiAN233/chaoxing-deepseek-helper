@@ -248,6 +248,7 @@ const server = http.createServer((req, res) => {
   await require('./completion-checks.cjs')({evaluate,pause,record,assert,result});
   await require('./reload-checks.cjs')({evaluate,pause,record,assert,result});
   await require('./resume-checks.cjs')({evaluate,pause,record,assert,result});
+  await require('./source-readiness-checks.cjs')({evaluate,pause,record,assert,result});
   await require('./log-checks.cjs')({evaluate,pause,record,assert,result});
   await require('./foreground-checks.cjs')({evaluate,pause,record,assert,result});
   await require('./continuous-playback-checks.cjs')({evaluate,pause,record,assert,result});
