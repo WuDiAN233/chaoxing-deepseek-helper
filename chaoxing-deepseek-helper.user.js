@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网课小助手｜DeepSeek 答题｜1–10倍速
 // @namespace    noshuang
-// @version      0.3.17
+// @version      0.3.18
 // @author       isMobile
 // @description  学习通、智慧树课程助手：1–10倍速、DeepSeek结构化答题、填写验证。使用个人DeepSeek API Key，无第三方付费题库。
 // @license      MIT
@@ -6551,6 +6551,23 @@
     media.currentTime = 0;
     return true;
   };
+  const isCxSubmittedWork = (document2) => {
+    if (!document2) return false;
+    const pathname = new URL(document2.URL || document2.documentURI || "about:blank").pathname;
+    const text = document2.documentElement?.innerText || "";
+    return /\/selectWorkQuestionYiPiYue(?:\.|\/|$)/.test(pathname) || text.includes("已完成") || text.includes("待批阅");
+  };
+  const getCxWorkPopup = (host) => {
+    try {
+      const popup = host?.workPop;
+      return typeof popup === "function" ? popup : null;
+    } catch (error) {
+      // A cross-origin WindowProxy intentionally denies access to page functions.
+      // Use the accessible native popup or DOM confirmation instead.
+      if (error?.name === "SecurityError") return null;
+      throw error;
+    }
+  };
   const submitCxChapterWork = async (workWindow, context, timeoutMs = 15000) => {
     if (!context.isCurrent()) return false;
     let confirmed = false;
@@ -6559,32 +6576,32 @@
     const hooks = [];
     const restore = () => {
       for (const { host, original, wrapper } of hooks) {
-        if (host.workPop === wrapper) host.workPop = original;
+        if (getCxWorkPopup(host) === wrapper) host.workPop = original;
       }
       context.signal?.removeEventListener("abort", restore);
     };
-    // Current Chaoxing validates the answers, then calls top.workPop. The only
-    // automatic confirmation allowed here is its exact fully-answered prompt.
-    for (const host of new Set([workWindow.top, workWindow])) {
-      if (!host || typeof host.workPop !== "function") continue;
-      const original = host.workPop;
-      const wrapper = function(message, submitLabel, cancelLabel, callback, ...rest) {
-        if (context.isCurrent() && String(message).trim() === "确认提交？" &&
-            submitLabel === "提交" && cancelLabel === "取消" && typeof callback === "function") {
-          confirmed = true;
-          restore();
-          try { callback(); } catch (error) { failure = error; }
-          return;
-        }
-        extraPrompt = true;
-        restore();
-        return original.call(this, message, submitLabel, cancelLabel, callback, ...rest);
-      };
-      hooks.push({ host, original, wrapper });
-      host.workPop = wrapper;
-    }
     context.signal?.addEventListener("abort", restore, { once: true });
     try {
+      // Current Chaoxing validates answers before opening its native dialog.
+      // Only the exact fully-answered prompt is automatically confirmed.
+      for (const host of new Set([workWindow.top, workWindow])) {
+        const original = getCxWorkPopup(host);
+        if (!original) continue;
+        const wrapper = function(message, submitLabel, cancelLabel, callback, ...rest) {
+          if (context.isCurrent() && String(message).trim() === "确认提交？" &&
+              submitLabel === "提交" && cancelLabel === "取消" && typeof callback === "function") {
+            confirmed = true;
+            restore();
+            try { callback(); } catch (error) { failure = error; }
+            return;
+          }
+          extraPrompt = true;
+          restore();
+          return original.call(this, message, submitLabel, cancelLabel, callback, ...rest);
+        };
+        host.workPop = wrapper;
+        hooks.push({ host, original, wrapper });
+      }
       await workWindow.btnBlueSubmit();
       const ready = await waitForCxCondition(() => confirmed || extraPrompt || failure ||
         Array.from(workWindow.document.querySelectorAll('[onclick*="submitCheckTimes"]')).some(usable), context, timeoutMs);
@@ -6720,7 +6737,7 @@
               // Refresh once only when the nested work page actually shows grading.
               const page = getChapterPage();
               const graded = allIframes.some((frame) => {
-                try { return /selectWorkQuestionYiPiYue/.test(frame.contentWindow.location.pathname); }
+                try { return isCxSubmittedWork(frame.contentDocument); }
                 catch { return false; }
               });
               const endedMedia = allIframes.some((frame) => {
@@ -6919,7 +6936,7 @@
         return;
       configStore.menuIndex = ANSWER_TAB_NAME2;
       logStore.addLog("发现一个作业，正在解析", "primary");
-      if (iframeDocument.documentElement.innerText.includes("已完成") || iframeDocument.documentElement.innerText.includes("待批阅")) {
+      if (isCxSubmittedWork(iframeDocument)) {
         logStore.addLog("作业已经完成，跳过", "success");
         return;
       }
